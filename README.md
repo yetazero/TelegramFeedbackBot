@@ -1,6 +1,7 @@
 # TelegramFeedbackBot
+
 Easy-to-use Telegram feedback bot with a graphical management tool.
-# Telegram Bot Manager
+Telegram Bot Manager
 
 This application provides a simple graphical interface to manage a Telegram bot. It allows you to start and stop the bot and configure the bot's settings.
 
@@ -23,9 +24,6 @@ The following Python libraries are required to run the Python script:
 2.  **Configuration:**
     -   A `config.ini` file is included in the repository. Ensure it is configured with your Telegram Bot Token and Admin ID.
 
-3.  **Executable for Windows:**
-    -   For your convenience, a Windows executable (`bot.exe`) is included, offering similar functionality to running the Python script. Use at your own discretion.
-
 ## Usage
 
 **Option 1: Running the Python Script**
@@ -34,10 +32,4 @@ The following Python libraries are required to run the Python script:
 2.  Navigate to the directory containing `bot.py` in your terminal or command prompt.
 3.  Run the script using: `python bot.py`
 
-**Option 2: Running the Executable (.exe) on Windows**
-
-1.  Download the `bot.exe` file.
-2.  Place the `config.ini` file in the same directory.
-3.  Double-click the executable to run the application.
-
-Once the application is running (via either method), use the graphical interface to start and stop the bot.
+**Note:** The Windows executable (`bot.exe`) file has been removed from the repository due to some analysis systems incorrectly flagging it as potentially malicious. It is recommended to run the application using the Python script (`bot.py`) after installing the necessary dependencies.
