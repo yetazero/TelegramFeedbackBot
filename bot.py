@@ -5,7 +5,7 @@ import configparser
 import logging
 import os
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
+import sys
 
 # Logging configuration
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -13,13 +13,17 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 # Configuration
 BANNED_FILE = "banned.txt"
 CONFIG_FILE = "config.ini"
+USERS_FILE = "users.txt"  # Файл для хранения ID пользователей
 
 # Banned list functions
 def load_banned():
     try:
         with open(BANNED_FILE, "r") as f:
-            return {line.strip() for line in f}
+            return {line.strip() for line in f if line.strip()}
     except FileNotFoundError:
+        # Create empty file if not exists
+        with open(BANNED_FILE, "w") as f:
+            pass
         return set()
 
 def save_banned(banned_users):
@@ -29,6 +33,24 @@ def save_banned(banned_users):
     except Exception as e:
         logging.error(f"Ban save error: {e}")
 
+# User list functions
+def load_users():
+    try:
+        with open(USERS_FILE, "r") as f:
+            return {line.strip() for line in f if line.strip().isdigit()}
+    except FileNotFoundError:
+        # Create empty file if not exists
+        with open(USERS_FILE, "w") as f:
+            pass
+        return set()
+
+def save_users(users):
+    try:
+        with open(USERS_FILE, "w") as f:
+            f.write("\n".join(users))
+    except Exception as e:
+        logging.error(f"Users save error: {e}")
+
 class TelegramBotApp:
     def __init__(self, root):
         self.root = root
@@ -37,6 +59,13 @@ class TelegramBotApp:
         
         # Loading configuration
         self.config = configparser.ConfigParser()
+        
+        # Create default config if it doesn't exist
+        if not os.path.exists(CONFIG_FILE):
+            self.config['DEFAULT'] = {'admin_id': '', 'token': ''}
+            with open(CONFIG_FILE, 'w') as configfile:
+                self.config.write(configfile)
+        
         self.config.read(CONFIG_FILE)
         self.admin_id = self.config.get('DEFAULT', 'admin_id', fallback='')
         self.token = self.config.get('DEFAULT', 'token', fallback='')
@@ -45,24 +74,27 @@ class TelegramBotApp:
         self.frame = tk.Frame(root)
         self.frame.pack(padx=10, pady=10)
         
-        tk.Label(self.frame, text="Admin ID:").grid(row=0, column=0)
+        tk.Label(self.frame, text="Admin ID:").grid(row=0, column=0, sticky=tk.W)
         self.admin_entry = tk.Entry(self.frame, width=30)
-        self.admin_entry.grid(row=0, column=1)
+        self.admin_entry.grid(row=0, column=1, padx=5, pady=5)
         self.admin_entry.insert(0, self.admin_id)
         
-        tk.Label(self.frame, text="Bot Token:").grid(row=1, column=0)
+        tk.Label(self.frame, text="Bot Token:").grid(row=1, column=0, sticky=tk.W)
         self.token_entry = tk.Entry(self.frame, width=30)
-        self.token_entry.grid(row=1, column=1)
+        self.token_entry.grid(row=1, column=1, padx=5, pady=5)
         self.token_entry.insert(0, self.token)
         
         self.status_label = tk.Label(root, text="Not running", fg="red")
         self.status_label.pack(pady=10)
         
-        self.start_btn = tk.Button(root, text="Start Bot", command=self.start_bot)
-        self.start_btn.pack(pady=5)
+        self.button_frame = tk.Frame(root)
+        self.button_frame.pack(pady=5)
         
-        self.stop_btn = tk.Button(root, text="Stop Bot", command=self.stop_bot, state=tk.DISABLED)
-        self.stop_btn.pack(pady=5)
+        self.start_btn = tk.Button(self.button_frame, text="Start Bot", command=self.start_bot, width=15)
+        self.start_btn.grid(row=0, column=0, padx=5)
+        
+        self.stop_btn = tk.Button(self.button_frame, text="Stop Bot", command=self.stop_bot, width=15, state=tk.DISABLED)
+        self.stop_btn.grid(row=0, column=1, padx=5)
         
         self.tray_btn = tk.Button(root, text="Minimize to Tray", command=self.add_to_tray)
         self.tray_btn.pack(pady=5)
@@ -71,8 +103,7 @@ class TelegramBotApp:
         self.bot_running = False
         self.tray_icon = None
         self.application = None
-        self.executor = ThreadPoolExecutor(max_workers=1)
-        self.loop = None
+        self.stop_event = threading.Event()
 
     def save_config(self):
         self.config['DEFAULT'] = {
@@ -98,6 +129,9 @@ class TelegramBotApp:
             
         self.save_config()
         
+        # Reset stop event
+        self.stop_event.clear()
+        
         # Start bot in a separate thread
         self.bot_thread = threading.Thread(target=self.run_bot, args=(token, admin_id))
         self.bot_thread.daemon = True
@@ -108,61 +142,50 @@ class TelegramBotApp:
         self.status_label.config(text="Running...", fg="green")
 
     def stop_bot(self):
-        if self.application:
-            try:
-                # Stop bot in another thread
-                future = self.executor.submit(self.stop_bot_async)
-                future.result(timeout=5)  # Give 5 seconds to stop
-            except Exception as e:
-                logging.error(f"Failed to stop bot: {e}")
-                messagebox.showerror("Error", f"Failed to stop bot: {e}")
-            finally:
-                self.application = None
-                self.status_label.config(text="Stopped", fg="red")
-                self.start_btn.config(state=tk.NORMAL)
-                self.stop_btn.config(state=tk.DISABLED)
-
-    def stop_bot_async(self):
-        if self.loop and self.application:
-            asyncio.run_coroutine_threadsafe(self.application.stop(), self.loop)
-            self.loop = None
+        if self.bot_thread and self.bot_thread.is_alive():
+            # Signal the thread to stop
+            self.stop_event.set()
+            
+            # Wait for thread to finish (with timeout)
+            self.bot_thread.join(timeout=2)
+            
+            # Update UI
+            self.status_label.config(text="Stopped", fg="red")
+            self.start_btn.config(state=tk.NORMAL)
+            self.stop_btn.config(state=tk.DISABLED)
 
     def add_to_tray(self):
         try:
             # Try to import only when function is called
-            from pystray import Icon as TrayIcon, Menu as TrayMenu, MenuItem as TrayMenuItem
-            from PIL import Image
+            import pystray
+            from PIL import Image, ImageDraw
             
             def on_restore(icon, item):
                 icon.stop()
-                self.root.deiconify()
+                self.root.after(0, self.root.deiconify)
 
             def on_exit(icon, item):
                 icon.stop()
-                self.root.quit()
+                self.root.after(0, self.root.quit)
 
-            # Tray icon
-            try:
-                if os.path.exists("icon.png"):
-                    image = Image.open("icon.png")
-                else:
-                    # Create a simple icon if file is missing
-                    image = Image.new('RGB', (64, 64), color = 'blue')
-                
-                menu = TrayMenu(
-                    TrayMenuItem("Restore", on_restore),
-                    TrayMenuItem("Exit", on_exit)
-                )
-                self.tray_icon = TrayIcon("Telegram Bot Manager", image, "Telegram Bot Manager", menu)
-                
-                # Hide main window
-                self.root.withdraw()
-                
-                # Start tray icon
-                self.tray_icon.run_detached()  # Use run_detached to work in background
-            except Exception as e:
-                logging.error(f"Tray icon error: {e}")
-                messagebox.showerror("Error", f"Failed to create tray icon: {e}")
+            # Create a simple icon 
+            image = Image.new('RGB', (64, 64), color='blue')
+            dc = ImageDraw.Draw(image)
+            dc.rectangle((16, 16, 48, 48), fill='white')
+            
+            menu = pystray.Menu(
+                pystray.MenuItem("Restore", on_restore),
+                pystray.MenuItem("Exit", on_exit)
+            )
+            
+            self.tray_icon = pystray.Icon("Telegram Bot Manager", image, "Telegram Bot Manager", menu)
+            
+            # Hide main window
+            self.root.withdraw()
+            
+            # Start tray icon in separate thread
+            threading.Thread(target=self.tray_icon.run, daemon=True).start()
+            
         except ImportError as e:
             logging.error(f"Failed to import tray dependencies: {e}")
             messagebox.showerror("Error", "Failed to initialize tray. Make sure pystray and Pillow are installed.")
@@ -174,12 +197,25 @@ class TelegramBotApp:
             from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
             
             banned = load_banned()
+            users = load_users()
+            
+            # Create a new event loop for this thread
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
             
             # Dictionary to store message sending states
             send_states = {}
+            publish_state = {"active": False, "content": None}
             
             # Command handlers
             async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+                user_id = str(update.effective_user.id)
+                
+                # Add user to users list
+                if user_id not in users:
+                    users.add(user_id)
+                    save_users(users)
+                
                 if update.effective_user.id == admin_id:
                     help_message = (
                         "Welcome, Admin!\n\n"
@@ -187,6 +223,7 @@ class TelegramBotApp:
                         "/ban user-id (`/b`) - Ban a user\n"
                         "/unban user-id (`/u`) - Unban a user\n"
                         "/cancel (`/c`) - Cancel message sending\n"
+                        "/publish (`/p`) - Send message to all users\n"
                         "/help (`/h`) - Show this help\n\n"
                         "To send a message to a user, enter the message and then the user ID.\n\n"
                         "Author: [yetazero](https://t.me/yetazero)"
@@ -233,23 +270,35 @@ class TelegramBotApp:
                 if user_id in send_states and send_states[user_id]["step"] == "choose_user":
                     del send_states[user_id]
                     await update.message.reply_text("Cancelled.")
+                elif publish_state["active"]:
+                    publish_state["active"] = False
+                    publish_state["content"] = None
+                    await update.message.reply_text("Mass mailing cancelled.")
                 else:
                     await update.message.reply_text("Nothing to cancel.")
             
-            async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+            async def start_publish(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if update.effective_user.id != admin_id:
                     return
                 
-                help_message = (
-                    "Available commands:\n"
-                    "/ban user-id (`/b`) - Ban a user\n"
-                    "/unban user-id (`/u`) - Unban a user\n"
-                    "/cancel (`/c`) - Cancel message sending\n"
-                    "/help (`/h`) - Show this help\n\n"
-                    "To send a message to a user, enter the message and then the user ID.\n\n"
-                    "Author: [yetazero](https://t.me/yetazero)"
-                )
-                await update.message.reply_text(help_message, parse_mode="Markdown")
+                publish_state["active"] = True
+                await update.message.reply_text("Please send the content you want to publish to all users.")
+            
+            async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+                if update.effective_user.id == admin_id:
+                    help_message = (
+                        "Available commands:\n"
+                        "/ban user-id (`/b`) - Ban a user\n"
+                        "/unban user-id (`/u`) - Unban a user\n"
+                        "/cancel (`/c`) - Cancel message sending\n"
+                        "/publish (`/p`) - Send message to all users\n"
+                        "/help (`/h`) - Show this help\n\n"
+                        "To send a message to a user, enter the message and then the user ID.\n\n"
+                        "Author: [yetazero](https://t.me/yetazero)"
+                    )
+                    await update.message.reply_text(help_message, parse_mode="Markdown")
+                else:
+                    await update.message.reply_text("Send your message to the administrator here. I'll forward it.")
             
             async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if update.effective_user.id != admin_id:
@@ -258,8 +307,43 @@ class TelegramBotApp:
                 user_id = update.effective_user.id
                 message = update.message
                 
+                # Handle publish mode
+                if publish_state["active"]:
+                    # Capture the message for publishing
+                    publish_content = {
+                        "document": message.document.file_id if message.document else None,
+                        "photo": message.photo[-1].file_id if message.photo else None,
+                        "video": message.video.file_id if message.video else None,
+                        "audio": message.audio.file_id if message.audio else None,
+                        "voice": message.voice.file_id if message.voice else None,
+                        "video_note": message.video_note.file_id if message.video_note else None,
+                        "sticker": message.sticker.file_id if message.sticker else None,
+                        "text": message.text if message.text else None,
+                        "caption": message.caption if message.caption else None,
+                        "dice": {"emoji": message.dice.emoji, "value": message.dice.value} if message.dice else None
+                    }
+                    
+                    # Check if any content was captured
+                    if any(value for key, value in publish_content.items() if key != "caption"):
+                        publish_state["content"] = publish_content
+                        
+                        # Only text prompt, no button
+                        await message.reply_text(
+                            f"Ready to publish to {len(users)} users. Please reply with `/confirm` to proceed or `/cancel` to abort.",
+                            parse_mode="Markdown"
+                        )
+                    else:
+                        await message.reply_text("No content detected. Please send something to publish.")
+                    return
+                
+                # Process confirmation for publishing
+                if message.text and message.text.lower().strip() == "confirm" and publish_state["content"]:
+                    await process_publishing(message, context.bot, publish_state["content"], users, banned)
+                    return
+                
                 # If admin sends any content (file, photo, video, etc.)
-                if any([message.document, message.photo, message.video, message.audio, message.voice, message.video_note]):
+                if any([message.document, message.photo, message.video, message.audio, 
+                       message.voice, message.video_note, message.sticker, message.dice]):
                     # Save content data
                     send_states[user_id] = {
                         "content": {
@@ -269,7 +353,9 @@ class TelegramBotApp:
                             "audio": message.audio.file_id if message.audio else None,
                             "voice": message.voice.file_id if message.voice else None,
                             "video_note": message.video_note.file_id if message.video_note else None,
+                            "sticker": message.sticker.file_id if message.sticker else None,
                             "caption": message.caption,
+                            "dice": {"emoji": message.dice.emoji, "value": message.dice.value} if message.dice else None
                         },
                         "step": "choose_user"
                     }
@@ -300,21 +386,7 @@ class TelegramBotApp:
                     
                     try:
                         # Send content to user
-                        if "document" in content and content["document"]:
-                            await context.bot.send_document(chat_id=target_user_id, document=content["document"], caption=content.get("caption"))
-                        elif "photo" in content and content["photo"]:
-                            await context.bot.send_photo(chat_id=target_user_id, photo=content["photo"], caption=content.get("caption"))
-                        elif "video" in content and content["video"]:
-                            await context.bot.send_video(chat_id=target_user_id, video=content["video"], caption=content.get("caption"))
-                        elif "audio" in content and content["audio"]:
-                            await context.bot.send_audio(chat_id=target_user_id, audio=content["audio"], caption=content.get("caption"))
-                        elif "voice" in content and content["voice"]:
-                            await context.bot.send_voice(chat_id=target_user_id, voice=content["voice"], caption=content.get("caption"))
-                        elif "video_note" in content and content["video_note"]:
-                            await context.bot.send_video_note(chat_id=target_user_id, video_note=content["video_note"])
-                        elif "text" in content and content["text"]:
-                            await context.bot.send_message(chat_id=target_user_id, text=content["text"])
-                        
+                        await send_content_to_user(context.bot, target_user_id, content)
                         await message.reply_text(f"Content sent to user {target_user_id}.")
                     except Exception as e:
                         logging.error(f"Failed to send content: {e}")
@@ -323,11 +395,107 @@ class TelegramBotApp:
                     # Clear state
                     del send_states[user_id]
             
+            # Function to process publishing
+            async def process_publishing(message, bot, content, users, banned):
+                sent_count = 0
+                failed_count = 0
+                
+                # Status message
+                status_msg = await message.reply_text(f"Publishing to {len(users)} users...")
+                
+                # Send to all users
+                for user_id_str in users:
+                    if user_id_str in banned:
+                        continue
+                        
+                    try:
+                        target_user_id = int(user_id_str)
+                        await send_content_to_user(bot, target_user_id, content)
+                        sent_count += 1
+                        
+                        # Update status occasionally
+                        if sent_count % 10 == 0:
+                            await status_msg.edit_text(
+                                f"Publishing: {sent_count}/{len(users)} done, {failed_count} failed..."
+                            )
+                            
+                    except Exception as e:
+                        logging.error(f"Failed to publish to user {user_id_str}: {e}")
+                        failed_count += 1
+                
+                # Final status update
+                await status_msg.edit_text(
+                    f"Publishing complete: {sent_count} succeeded, {failed_count} failed."
+                )
+                
+                # Reset publish state
+                publish_state["active"] = False
+                publish_state["content"] = None
+            
+            async def send_content_to_user(bot, target_user_id, content):
+                # Helper function to send any content type to a user
+                if content.get("document"):
+                    await bot.send_document(
+                        chat_id=target_user_id, 
+                        document=content["document"], 
+                        caption=content.get("caption")
+                    )
+                elif content.get("photo"):
+                    await bot.send_photo(
+                        chat_id=target_user_id, 
+                        photo=content["photo"], 
+                        caption=content.get("caption")
+                    )
+                elif content.get("video"):
+                    await bot.send_video(
+                        chat_id=target_user_id, 
+                        video=content["video"], 
+                        caption=content.get("caption")
+                    )
+                elif content.get("audio"):
+                    await bot.send_audio(
+                        chat_id=target_user_id, 
+                        audio=content["audio"], 
+                        caption=content.get("caption")
+                    )
+                elif content.get("voice"):
+                    await bot.send_voice(
+                        chat_id=target_user_id, 
+                        voice=content["voice"], 
+                        caption=content.get("caption")
+                    )
+                elif content.get("video_note"):
+                    await bot.send_video_note(
+                        chat_id=target_user_id, 
+                        video_note=content["video_note"]
+                    )
+                elif content.get("sticker"):
+                    await bot.send_sticker(
+                        chat_id=target_user_id, 
+                        sticker=content["sticker"]
+                    )
+                elif content.get("dice"):
+                    await bot.send_dice(
+                        chat_id=target_user_id, 
+                        emoji=content["dice"]["emoji"]
+                    )
+                elif content.get("text"):
+                    await bot.send_message(
+                        chat_id=target_user_id, 
+                        text=content["text"]
+                    )
+            
             async def forward_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_id = update.effective_user.id
                 
+                # Store user ID if not already present
+                user_id_str = str(user_id)
+                if user_id_str not in users:
+                    users.add(user_id_str)
+                    save_users(users)
+                
                 # Check for ban
-                if str(user_id) in banned:
+                if user_id_str in banned:
                     return
                 
                 message = update.message
@@ -340,9 +508,6 @@ class TelegramBotApp:
                     f"Username: @{username}"
                 )
                 
-                # Also make clickable user-id for convenience
-                clickable_user_id = f"[{user_id}](tg://user?id={user_id})"
-                
                 # Forward text message
                 if message.text:
                     await context.bot.send_message(admin_id, f"{user_info}\nText: {message.text}", parse_mode="Markdown")
@@ -350,6 +515,25 @@ class TelegramBotApp:
                 # Get caption if available
                 caption = message.caption or ""
                 caption_info = f"\nCaption: {caption}" if caption else ""
+                
+                # Forward dice message (interactive emoji)
+                if message.dice:
+                    # Get dice info
+                    dice_emoji = message.dice.emoji
+                    dice_value = message.dice.value
+                    
+                    # Send the dice to admin
+                    await context.bot.send_dice(
+                        chat_id=admin_id,
+                        emoji=dice_emoji
+                    )
+                    
+                    # Send additional info about the dice
+                    await context.bot.send_message(
+                        chat_id=admin_id,
+                        text=f"{user_info}\nDice sent with emoji: {dice_emoji}, value: {dice_value}",
+                        parse_mode="Markdown"
+                    )
                 
                 # Forward document
                 if message.document:
@@ -410,11 +594,34 @@ class TelegramBotApp:
                         parse_mode="Markdown"
                     )
                 
+                # Forward sticker 
+                if message.sticker:
+                    # First send the sticker
+                    await context.bot.send_sticker(
+                        chat_id=admin_id,
+                        sticker=message.sticker.file_id
+                    )
+                    # Then send user information
+                    await context.bot.send_message(
+                        chat_id=admin_id,
+                        text=f"{user_info}\nSticker from user",
+                        parse_mode="Markdown"
+                    )
+                
                 # Confirmation for user
                 await message.reply_text("Your message has been sent to the administrator!")
-            
-            # Function to run bot
-            async def run_telegram_bot():
+
+            # Text-based confirm command handler
+            async def confirm_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+                if update.effective_user.id != admin_id:
+                    return
+                    
+                if publish_state["content"]:
+                    await process_publishing(update.message, context.bot, publish_state["content"], users, banned)
+                else:
+                    await update.message.reply_text("Nothing to confirm.")
+
+            async def run_async_bot():
                 # Create application and pass token
                 app = Application.builder().token(token).build()
                 
@@ -422,8 +629,10 @@ class TelegramBotApp:
                 app.add_handler(CommandHandler("start", start))
                 app.add_handler(CommandHandler(["ban", "b"], ban_user))
                 app.add_handler(CommandHandler(["unban", "u"], unban_user))
-                app.add_handler(CommandHandler(["cancel", "c"], cancel_sending))  
+                app.add_handler(CommandHandler(["cancel", "c"], cancel_sending))
+                app.add_handler(CommandHandler(["publish", "p"], start_publish))
                 app.add_handler(CommandHandler(["help", "h"], show_help))
+                app.add_handler(CommandHandler("confirm", confirm_command))
                 
                 # Filter for admin messages (not commands)
                 admin_filter = filters.User(admin_id) & ~filters.COMMAND
@@ -433,42 +642,79 @@ class TelegramBotApp:
                 user_filter = ~filters.User(admin_id) & ~filters.COMMAND
                 app.add_handler(MessageHandler(user_filter, forward_to_admin))
                 
-                self.application = app
+                # Start the bot
                 await app.initialize()
                 await app.start()
                 await app.updater.start_polling()
                 
-                # Wait while bot is active
+                logging.info("Bot started successfully")
+                
+                # Loop while bot is active
                 try:
-                    # Infinite loop to keep bot active
-                    while True:
+                    while not self.stop_event.is_set():
                         await asyncio.sleep(1)
-                except asyncio.CancelledError:
-                    # Handle cancellation
-                    logging.info("Bot polling cancelled")
                 finally:
-                    await app.stop()
+                    logging.info("Stopping bot...")
                     await app.updater.stop()
-            
-            # Run bot in async mode
-            self.loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(self.loop)
-            self.loop.run_until_complete(run_telegram_bot())
-            
+                    await app.stop()
+                    await app.shutdown()
+                    logging.info("Bot stopped")
+
+            # Run the bot in the event loop
+            try:
+                loop.run_until_complete(run_async_bot())
+            except Exception as e:
+                logging.error(f"Bot runtime error: {e}")
+                # Update UI from this thread
+                self.root.after(0, lambda: self.status_label.config(text="Error", fg="red"))
+                self.root.after(0, lambda: self.start_btn.config(state=tk.NORMAL))
+                self.root.after(0, lambda: self.stop_btn.config(state=tk.DISABLED))
+            finally:
+                loop.close()
+                
         except ImportError as e:
             logging.error(f"Failed to import python-telegram-bot: {e}")
-            messagebox.showerror("Error", f"Error importing python-telegram-bot modules: {e}\nMake sure the library is installed.")
+            self.root.after(0, lambda: messagebox.showerror("Error", 
+                f"Error importing python-telegram-bot modules: {e}\n\nПожалуйста, установите библиотеку командой:\npip install python-telegram-bot"))
             self.root.after(0, lambda: self.status_label.config(text="Error", fg="red"))
             self.root.after(0, lambda: self.start_btn.config(state=tk.NORMAL))
             self.root.after(0, lambda: self.stop_btn.config(state=tk.DISABLED))
         except Exception as e:
             logging.error(f"General error: {e}")
-            messagebox.showerror("Error", f"Error: {e}")
+            self.root.after(0, lambda: messagebox.showerror("Error", f"Произошла ошибка: {e}"))
             self.root.after(0, lambda: self.status_label.config(text="Error", fg="red"))
             self.root.after(0, lambda: self.start_btn.config(state=tk.NORMAL))
             self.root.after(0, lambda: self.stop_btn.config(state=tk.DISABLED))
 
 if __name__ == "__main__":
+    # Check for required dependencies
+    missing_deps = []
+    try:
+        import telegram
+    except ImportError:
+        missing_deps.append("python-telegram-bot")
+    
+    try:
+        from PIL import Image
+    except ImportError:
+        missing_deps.append("pillow")
+    
+    try:
+        import pystray
+    except ImportError:
+        missing_deps.append("pystray")
+    
+    # If dependencies are missing, show a message
+    if missing_deps:
+        root = tk.Tk()
+        root.withdraw()
+        deps_str = ", ".join(missing_deps)
+        install_cmd = "pip install " + " ".join(missing_deps)
+        messagebox.showwarning("Missing Dependencies", 
+            f"Следующие библиотеки не установлены: {deps_str}\n\n"
+            f"Установите их, используя команду:\n{install_cmd}")
+    
+    # Start the application
     root = tk.Tk()
     app = TelegramBotApp(root)
     root.mainloop()
