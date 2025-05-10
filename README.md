@@ -1,15 +1,18 @@
-# TelegramFeedbackBot v0.2
+# TelegramFeedbackBot v0.3
 
-An easy-to-use Telegram bot for collecting user feedback, now enhanced with a graphical management tool and new features for improved interaction.
+An easy-to-use Telegram bot for collecting user feedback, now enhanced with a graphical management tool and even more features for richer interaction and control.
+This application provides a simple graphical interface (Telegram Bot Manager) to manage your Telegram bot. It allows you to start and stop the bot, configure its settings, and now offers enhanced communication capabilities with users.
+New in v0.3:
 
-This application provides a simple graphical interface (Telegram Bot Manager) to manage your Telegram bot. It allows you to start and stop the bot, configure its settings, and now includes the ability to send announcements to all active users.
+Poll Support: Users can now send polls to the bot.
+Location Sharing: The bot now supports receiving users' shared locations.
+Contact Sharing: Users can share their contacts with the bot.
+Anti-Spam Cooldown (`/cooldown`): Administrators can now use the `/cooldown` command to set a time limit between user messages, helping to prevent spam and ensure smoother interactions.
+# Key Improvements from v0.2:
 
-## Key Improvements in v0.2:
-
-* **Mass Messaging:** Introduced the `/publish` (`/p`) command, enabling administrators to send messages to all active bot users.
-* **Sticker Support:** Fixed a bug that prevented the bot from correctly processing messages containing custom sticker packs.
-* **Interactive Emojis:** Added support for interactive emotions (Dice) for a more engaging user experience.
-
+Mass Messaging: Introduced the `/publish` (/p) command, enabling administrators to send messages to all active bot users.
+Sticker Support: Fixed a bug that prevented the bot from correctly processing messages containing custom sticker packs.
+Interactive Emojis: Added support for interactive emotions (Dice) for a more engaging user experience.
 ## Dependencies
 
 The following Python libraries are required to run the Python script. You can install them using pip:
