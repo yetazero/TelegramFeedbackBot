@@ -27,19 +27,20 @@ admin_id = None # Admin ID will be set when run_telegram_bot is called
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     
-    # Check if user is banned before adding to general users list on /start
+    # Check if user is banned
     banned_users = load_banned()
     if user_id in banned_users:
-        # If banned, don't add to users list and simply return or send a message if desired
-        # For now, we'll just prevent them from interacting further in terms of forwarding
         await update.message.reply_text("You are currently banned from using this bot.")
         return
 
-    # Add user to the general users list if not banned
+    # User is automatically added to users.txt (subscribed) on /start
+    # if they are not already there and not banned.
     users = load_users()
-    if user_id not in users:
+    if user_id not in users: # Only add if not already in the list
         users.add(user_id)
         save_users(users)
+        # Optional: Inform the user about automatic subscription and how to unsubscribe.
+        # await update.message.reply_text("You've been subscribed to updates! You can use /unsubscribe to opt-out.")
     
     if update.effective_user.id == admin_id:
         help_message = (
@@ -48,11 +49,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/ban user-id (/b) - Ban a user\n"
             "/unban user-id (/u) - Unban a user\n"
             "/cancel (/c) - Cancel message sending\n"
-            "/publish (/p) - Send message to all subscribed users\n" # Clarified for subscribed users
+            "/publish (/p) - Send message to all subscribed users\n"
             "/cooldown seconds - Set anti-spam timer (0 to disable)\n"
             "/help (/h) - Show this help\n"
-            "/subscribe (/sub) - Subscribe to mass publications\n" # Clarified for mass publications
-            "/unsubscribe (/unsub) - Unsubscribe from mass publications\n\n" # Clarified for mass publications
+            "/subscribe (/sub) - Subscribe to mass publications\n"
+            "/unsubscribe (/unsub) - Unsubscribe from mass publications\n\n"
             "Author - <a href='https://t.me/yetazero'>yetazero</a>"
         )
         await update.message.reply_text(help_message, parse_mode=ParseMode.HTML)
@@ -64,22 +65,22 @@ async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     banned_users = load_banned()
-    users = load_users() # Load general users list to potentially remove banned user from it
+    users = load_users() # Load users list to remove banned user from it
     try:
-        user_id = str(context.args[0])
-        if user_id in banned_users:
+        user_id_to_ban = str(context.args[0])
+        if user_id_to_ban in banned_users:
             await update.message.reply_text("User is already banned")
             return
         
-        banned_users.add(user_id)
+        banned_users.add(user_id_to_ban)
         save_banned(banned_users)
         
-        # Also remove from general users list if they are there, to prevent future /publish
-        if user_id in users:
-            users.remove(user_id)
+        # Also remove from users list (subscription list) if they are there
+        if user_id_to_ban in users:
+            users.remove(user_id_to_ban)
             save_users(users)
 
-        await update.message.reply_text(f"User {user_id} has been banned")
+        await update.message.reply_text(f"User {user_id_to_ban} has been banned and removed from subscriptions.")
     except (IndexError, ValueError):
         await update.message.reply_text("Usage: /ban user-id or /b user-id")
 
@@ -89,17 +90,17 @@ async def unban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     banned_users = load_banned()
     try:
-        user_id = str(context.args[0])
-        if user_id not in banned_users:
+        user_id_to_unban = str(context.args[0])
+        if user_id_to_unban not in banned_users:
             await update.message.reply_text("User is not banned")
             return
-        banned_users.remove(user_id)
+        banned_users.remove(user_id_to_unban)
         save_banned(banned_users)
         
-        # When unbanning, we don't automatically re-add to the general users list.
-        # They will be added on their next /start or message if they are not already.
-
-        await update.message.reply_text(f"User {user_id} has been unbanned")
+        # When unbanning, user is NOT automatically re-added to users.txt.
+        # They would be re-added on their next /start if not already in users.txt,
+        # or they can use /subscribe.
+        await update.message.reply_text(f"User {user_id_to_unban} has been unbanned. They will be re-subscribed on next /start if not already, or can use /subscribe.")
     except (IndexError, ValueError):
         await update.message.reply_text("Usage: /unban user-id or /u user-id")
 
@@ -175,11 +176,11 @@ async def subscribe_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("You cannot subscribe because you are currently banned.")
         return
 
-    all_users = load_users()
+    all_users = load_users() # This is users.txt, i.e. the subscription list
     
-    if user_id_to_subscribe not in all_users:
-        all_users.add(user_id_to_subscribe)
-        save_users(all_users)
+    if user_id_to_subscribe not in all_users: # If not already in subscription list
+        all_users.add(user_id_to_subscribe)   # Add to subscription list
+        save_users(all_users)                 # Save subscription list
         await update.message.reply_text("You have successfully subscribed to mass publications from the administrator!")
     else:
         await update.message.reply_text("You are already subscribed to mass publications.")
@@ -187,11 +188,11 @@ async def subscribe_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def unsubscribe_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id_to_unsubscribe = str(update.effective_user.id)
     
-    all_users = load_users()
+    all_users = load_users() # This is users.txt
     
-    if user_id_to_unsubscribe in all_users:
-        all_users.remove(user_id_to_unsubscribe)
-        save_users(all_users)
+    if user_id_to_unsubscribe in all_users: # If user is in the subscription list
+        all_users.remove(user_id_to_unsubscribe) # Remove them
+        save_users(all_users)                 # Save the updated list
         await update.message.reply_text("You have been unsubscribed from mass publications. You will no longer receive them from the administrator.")
     else:
         await update.message.reply_text("You are not currently subscribed to mass publications.")
@@ -288,7 +289,7 @@ async def process_publishing(message, bot, content):
     sent_count = 0
     failed_count = 0
     
-    users = load_users() # Only send to subscribed users
+    users = load_users() # Only send to subscribed users (from users.txt)
     banned = load_banned()
 
     status_msg = await message.reply_text(f"Publishing to {len(users)} users...")
@@ -302,7 +303,7 @@ async def process_publishing(message, bot, content):
             await send_content_to_user(bot, target_user_id, content)
             sent_count += 1
             
-            if sent_count % 10 == 0:
+            if sent_count % 10 == 0: # Update status every 10 users
                 await status_msg.edit_text(
                     f"Publishing: {sent_count}/{len(users)} done, {failed_count} failed..."
                 )
@@ -402,11 +403,11 @@ async def forward_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # If banned, just ignore the message and don't forward it.
         return
         
-    # Add user to the general users list if not banned
-    all_users = load_users()
-    if user_id_str not in all_users:
-        all_users.add(user_id_str)
-        save_users(all_users)
+    # MODIFICATION: Sending a message does NOT automatically add user to users.txt (subscription list)
+    # all_users = load_users()
+    # if user_id_str not in all_users:
+    #     all_users.add(user_id_str)
+    #     save_users(all_users)
     
     global current_cooldown_seconds
     if current_cooldown_seconds > 0:
@@ -594,8 +595,6 @@ async def run_telegram_bot(token: str, admin_id_param: int, initial_cooldown: in
         admin_filter = filters.User(admin_id) & ~filters.COMMAND
         app.add_handler(MessageHandler(admin_filter, handle_admin_message))
         
-        # This filter ensures that only non-admin messages are forwarded,
-        # and that banned users' messages are implicitly ignored before forwarding.
         user_filter = ~filters.User(admin_id) & ~filters.COMMAND
         app.add_handler(MessageHandler(user_filter, forward_to_admin))
         
