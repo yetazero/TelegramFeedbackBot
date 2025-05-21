@@ -5,42 +5,33 @@ import time
 
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
-from telegram.constants import ParseMode
+from telegram.constants import ParseMode, PollType
 
 from utils import load_banned, save_banned, load_users, save_users
 from config_manager import ConfigManager
 
-# Shared event for stopping the bot
 stop_telegram_bot_event = threading.Event()
 
-# Global state for send states and publish state
 send_states = {}
 publish_state = {"active": False, "content": None}
 
-# Global dictionary for user last message time for cooldown
 user_last_message = {}
 
-# This will be loaded from config when the bot starts
 current_cooldown_seconds = 0
-admin_id = None # Admin ID will be set when run_telegram_bot is called
+admin_id = None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     
-    # Check if user is banned
     banned_users = load_banned()
     if user_id in banned_users:
         await update.message.reply_text("You are currently banned from using this bot.")
         return
 
-    # User is automatically added to users.txt (subscribed) on /start
-    # if they are not already there and not banned.
     users = load_users()
-    if user_id not in users: # Only add if not already in the list
+    if user_id not in users:
         users.add(user_id)
         save_users(users)
-        # Optional: Inform the user about automatic subscription and how to unsubscribe.
-        # await update.message.reply_text("You've been subscribed to updates! You can use /unsubscribe to opt-out.")
     
     if update.effective_user.id == admin_id:
         help_message = (
@@ -65,7 +56,7 @@ async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     banned_users = load_banned()
-    users = load_users() # Load users list to remove banned user from it
+    users = load_users()
     try:
         user_id_to_ban = str(context.args[0])
         if user_id_to_ban in banned_users:
@@ -75,7 +66,6 @@ async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         banned_users.add(user_id_to_ban)
         save_banned(banned_users)
         
-        # Also remove from users list (subscription list) if they are there
         if user_id_to_ban in users:
             users.remove(user_id_to_ban)
             save_users(users)
@@ -97,9 +87,6 @@ async def unban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         banned_users.remove(user_id_to_unban)
         save_banned(banned_users)
         
-        # When unbanning, user is NOT automatically re-added to users.txt.
-        # They would be re-added on their next /start if not already in users.txt,
-        # or they can use /subscribe.
         await update.message.reply_text(f"User {user_id_to_unban} has been unbanned. They will be re-subscribed on next /start if not already, or can use /subscribe.")
     except (IndexError, ValueError):
         await update.message.reply_text("Usage: /unban user-id or /u user-id")
@@ -162,6 +149,7 @@ async def show_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/help (/h) - Show this help\n"
             "/subscribe (/sub) - Subscribe to mass publications\n"
             "/unsubscribe (/unsub) - Unsubscribe from mass publications\n\n"
+            ""
             "Author - <a href='https://t.me/yetazero'>yetazero</a>"
         )
         await update.message.reply_text(help_message, parse_mode=ParseMode.HTML)
@@ -176,11 +164,11 @@ async def subscribe_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("You cannot subscribe because you are currently banned.")
         return
 
-    all_users = load_users() # This is users.txt, i.e. the subscription list
+    all_users = load_users()
     
-    if user_id_to_subscribe not in all_users: # If not already in subscription list
-        all_users.add(user_id_to_subscribe)   # Add to subscription list
-        save_users(all_users)                 # Save subscription list
+    if user_id_to_subscribe not in all_users:
+        all_users.add(user_id_to_subscribe)
+        save_users(all_users)
         await update.message.reply_text("You have successfully subscribed to mass publications from the administrator!")
     else:
         await update.message.reply_text("You are already subscribed to mass publications.")
@@ -188,11 +176,11 @@ async def subscribe_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def unsubscribe_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id_to_unsubscribe = str(update.effective_user.id)
     
-    all_users = load_users() # This is users.txt
+    all_users = load_users()
     
-    if user_id_to_unsubscribe in all_users: # If user is in the subscription list
-        all_users.remove(user_id_to_unsubscribe) # Remove them
-        save_users(all_users)                 # Save the updated list
+    if user_id_to_unsubscribe in all_users:
+        all_users.remove(user_id_to_unsubscribe)
+        save_users(all_users)
         await update.message.reply_text("You have been unsubscribed from mass publications. You will no longer receive them from the administrator.")
     else:
         await update.message.reply_text("You are not currently subscribed to mass publications.")
@@ -201,8 +189,13 @@ async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYP
     if update.effective_user.id != admin_id:
         return
     
-    user_id = update.effective_user.id
     message = update.message
+
+    if message.poll:
+        await message.reply_text("Unfortunately, this type of content is disabled to maintain confidentiality.")
+        return
+    
+    user_id = update.effective_user.id
     
     if publish_state["active"]:
         publish_content = {
@@ -217,11 +210,10 @@ async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYP
             "caption": message.caption if message.caption else None,
             "dice": {"emoji": message.dice.emoji, "value": message.dice.value} if message.dice else None,
             "location": {"latitude": message.location.latitude, "longitude": message.location.longitude} if message.location else None,
-            "contact": {"phone_number": message.contact.phone_number, "first_name": message.contact.first_name} if message.contact else None,
-            "poll": message.poll.to_dict() if message.poll else None
+            "contact": {"phone_number": message.contact.phone_number, "first_name": message.contact.first_name} if message.contact else None
         }
         
-        if any(value for key, value in publish_content.items() if key != "caption"):
+        if any(value for key, value in publish_content.items() if key != "caption"): # "poll" key is not in publish_content
             publish_state["content"] = publish_content
             
             await message.reply_text(
@@ -237,7 +229,7 @@ async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYP
     
     if any([message.document, message.photo, message.video, message.audio, 
            message.voice, message.video_note, message.sticker, message.dice,
-           message.location, message.contact, message.poll]):
+           message.location, message.contact]): # message.poll removed from here
         send_states[user_id] = {
             "content": {
                 "document": message.document.file_id if message.document else None,
@@ -250,8 +242,7 @@ async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYP
                 "caption": message.caption,
                 "dice": {"emoji": message.dice.emoji, "value": message.dice.value} if message.dice else None,
                 "location": {"latitude": message.location.latitude, "longitude": message.location.longitude} if message.location else None,
-                "contact": {"phone_number": message.contact.phone_number, "first_name": message.contact.first_name} if message.contact else None,
-                "poll": message.poll.to_dict() if message.poll else None
+                "contact": {"phone_number": message.contact.phone_number, "first_name": message.contact.first_name} if message.contact else None
             },
             "step": "choose_user"
         }
@@ -267,21 +258,21 @@ async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYP
         await message.reply_text("Now enter the user ID:")
     
     elif message.text and user_id in send_states and send_states[user_id]["step"] == "choose_user":
-        target_user_id = message.text.strip()
+        target_user_id_str = message.text.strip()
         
-        if not target_user_id.isdigit():
+        if not target_user_id_str.isdigit():
             await message.reply_text("Invalid user ID. Please enter a valid numeric ID.")
             return
         
-        target_user_id = int(target_user_id)
+        target_user_id = int(target_user_id_str)
         content = send_states[user_id]["content"]
         
         try:
             await send_content_to_user(context.bot, target_user_id, content)
             await message.reply_text(f"Content sent to user {target_user_id}.")
         except Exception as e:
-            logging.error(f"Failed to send content: {e}")
-            await message.reply_text(f"Failed to send content: {e}")
+            logging.error(f"Failed to send content to user {target_user_id}: {e}")
+            await message.reply_text(f"Failed to send content to user {target_user_id}: {e}")
         
         del send_states[user_id]
 
@@ -289,13 +280,13 @@ async def process_publishing(message, bot, content):
     sent_count = 0
     failed_count = 0
     
-    users = load_users() # Only send to subscribed users (from users.txt)
+    users = load_users()
     banned = load_banned()
 
     status_msg = await message.reply_text(f"Publishing to {len(users)} users...")
     
     for user_id_str in users:
-        if user_id_str in banned: # Double-check to ensure no banned users receive
+        if user_id_str in banned:
             continue
             
         try:
@@ -303,7 +294,7 @@ async def process_publishing(message, bot, content):
             await send_content_to_user(bot, target_user_id, content)
             sent_count += 1
             
-            if sent_count % 10 == 0: # Update status every 10 users
+            if sent_count % 10 == 0: 
                 await status_msg.edit_text(
                     f"Publishing: {sent_count}/{len(users)} done, {failed_count} failed..."
                 )
@@ -323,31 +314,31 @@ async def send_content_to_user(bot, target_user_id, content):
     if content.get("document"):
         await bot.send_document(
             chat_id=target_user_id, 
-            document=content["document"], 
+            document=content["document"],
             caption=content.get("caption")
         )
     elif content.get("photo"):
         await bot.send_photo(
             chat_id=target_user_id, 
-            photo=content["photo"], 
+            photo=content["photo"],
             caption=content.get("caption")
         )
     elif content.get("video"):
         await bot.send_video(
             chat_id=target_user_id, 
-            video=content["video"], 
+            video=content["video"],
             caption=content.get("caption")
         )
     elif content.get("audio"):
         await bot.send_audio(
             chat_id=target_user_id, 
-            audio=content["audio"], 
+            audio=content["audio"],
             caption=content.get("caption")
         )
     elif content.get("voice"):
         await bot.send_voice(
             chat_id=target_user_id, 
-            voice=content["voice"], 
+            voice=content["voice"],
             caption=content.get("caption")
         )
     elif content.get("video_note"):
@@ -377,17 +368,6 @@ async def send_content_to_user(bot, target_user_id, content):
             phone_number=content["contact"]["phone_number"],
             first_name=content["contact"]["first_name"]
         )
-    elif content.get("poll"):
-        poll_data = content["poll"]
-        await bot.send_poll(
-            chat_id=target_user_id,
-            question=poll_data["question"],
-            options=[option["text"] for option in poll_data["options"]],
-            is_anonymous=poll_data["is_anonymous"],
-            type=poll_data["type"],
-            allows_multiple_answers=poll_data["allows_multiple_answers"],
-            explanation=poll_data.get("explanation")
-        )
     elif content.get("text"):
         await bot.send_message(
             chat_id=target_user_id, 
@@ -400,15 +380,8 @@ async def forward_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     banned_users = load_banned()
     if user_id_str in banned_users:
-        # If banned, just ignore the message and don't forward it.
         return
         
-    # MODIFICATION: Sending a message does NOT automatically add user to users.txt (subscription list)
-    # all_users = load_users()
-    # if user_id_str not in all_users:
-    #     all_users.add(user_id_str)
-    #     save_users(all_users)
-    
     global current_cooldown_seconds
     if current_cooldown_seconds > 0:
         current_time = time.time()
@@ -434,9 +407,12 @@ async def forward_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     if full_name:
         user_info += f"\nName: {full_name}"
+
+    forwarded_anything_to_admin = False
     
     if message.text:
         await context.bot.send_message(admin_id, f"{user_info}\nText: {message.text}", parse_mode="Markdown")
+        forwarded_anything_to_admin = True
     
     caption = message.caption or ""
     caption_info = f"\nCaption: {caption}" if caption else ""
@@ -444,125 +420,58 @@ async def forward_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if message.dice:
         dice_emoji = message.dice.emoji
         dice_value = message.dice.value
+        await context.bot.send_dice(chat_id=admin_id, emoji=dice_emoji)
+        await context.bot.send_message(chat_id=admin_id, text=f"{user_info}\nDice sent with emoji: {dice_emoji}, value: {dice_value}", parse_mode="Markdown")
+        forwarded_anything_to_admin = True
         
-        await context.bot.send_dice(
-            chat_id=admin_id,
-            emoji=dice_emoji
-        )
-        
-        await context.bot.send_message(
-            chat_id=admin_id,
-            text=f"{user_info}\nDice sent with emoji: {dice_emoji}, value: {dice_value}",
-            parse_mode="Markdown"
-        )
-    
     if message.document:
-        await context.bot.send_document(
-            chat_id=admin_id,
-            document=message.document.file_id,
-            caption=f"{user_info}{caption_info}",
-            parse_mode="Markdown"
-        )
-    
+        await context.bot.send_document(chat_id=admin_id, document=message.document.file_id, caption=f"{user_info}{caption_info}", parse_mode="Markdown")
+        forwarded_anything_to_admin = True
+        
     if message.photo:
-        await context.bot.send_photo(
-            chat_id=admin_id,
-            photo=message.photo[-1].file_id,
-            caption=f"{user_info}{caption_info}",
-            parse_mode="Markdown"
-        )
-    
+        await context.bot.send_photo(chat_id=admin_id, photo=message.photo[-1].file_id, caption=f"{user_info}{caption_info}", parse_mode="Markdown")
+        forwarded_anything_to_admin = True
+        
     if message.video:
-        await context.bot.send_video(
-            chat_id=admin_id,
-            video=message.video.file_id,
-            caption=f"{user_info}{caption_info}",
-            parse_mode="Markdown"
-        )
-    
+        await context.bot.send_video(chat_id=admin_id, video=message.video.file_id, caption=f"{user_info}{caption_info}", parse_mode="Markdown")
+        forwarded_anything_to_admin = True
+        
     if message.audio:
-        await context.bot.send_audio(
-            chat_id=admin_id,
-            audio=message.audio.file_id,
-            caption=f"{user_info}{caption_info}",
-            parse_mode="Markdown"
-        )
-    
+        await context.bot.send_audio(chat_id=admin_id, audio=message.audio.file_id, caption=f"{user_info}{caption_info}", parse_mode="Markdown")
+        forwarded_anything_to_admin = True
+        
     if message.voice:
-        await context.bot.send_voice(
-            chat_id=admin_id,
-            voice=message.voice.file_id,
-            caption=f"{user_info}{caption_info}",
-            parse_mode="Markdown"
-        )
-    
+        await context.bot.send_voice(chat_id=admin_id, voice=message.voice.file_id, caption=f"{user_info}{caption_info}", parse_mode="Markdown")
+        forwarded_anything_to_admin = True
+        
     if message.video_note:
-        await context.bot.send_video_note(
-            chat_id=admin_id,
-            video_note=message.video_note.file_id
-        )
-        await context.bot.send_message(
-            chat_id=admin_id,
-            text=f"{user_info}",
-            parse_mode="Markdown"
-        )
-    
+        await context.bot.send_video_note(chat_id=admin_id, video_note=message.video_note.file_id)
+        await context.bot.send_message(chat_id=admin_id, text=f"{user_info}", parse_mode="Markdown")
+        forwarded_anything_to_admin = True
+        
     if message.sticker:
-        await context.bot.send_sticker(
-            chat_id=admin_id,
-            sticker=message.sticker.file_id
-        )
-        await context.bot.send_message(
-            chat_id=admin_id,
-            text=f"{user_info}",
-            parse_mode="Markdown"
-        )
-    
+        await context.bot.send_sticker(chat_id=admin_id, sticker=message.sticker.file_id)
+        await context.bot.send_message(chat_id=admin_id, text=f"{user_info}", parse_mode="Markdown")
+        forwarded_anything_to_admin = True
+        
     if message.location:
-        await context.bot.send_location(
-            chat_id=admin_id,
-            latitude=message.location.latitude,
-            longitude=message.location.longitude
-        )
-        await context.bot.send_message(
-            chat_id=admin_id,
-            text=f"{user_info}\nLocation received",
-            parse_mode="Markdown"
-        )
-    
+        await context.bot.send_location(chat_id=admin_id, latitude=message.location.latitude, longitude=message.location.longitude)
+        await context.bot.send_message(chat_id=admin_id, text=f"{user_info}\nLocation received", parse_mode="Markdown")
+        forwarded_anything_to_admin = True
+        
     if message.contact:
-        await context.bot.send_contact(
-            chat_id=admin_id,
-            phone_number=message.contact.phone_number,
-            first_name=message.contact.first_name,
-            last_name=message.contact.last_name
-        )
-        await context.bot.send_message(
-            chat_id=admin_id,
-            text=f"{user_info}\nContact received",
-            parse_mode="Markdown"
-        )
-    
+        await context.bot.send_contact(chat_id=admin_id, phone_number=message.contact.phone_number, first_name=message.contact.first_name, last_name=message.contact.last_name)
+        await context.bot.send_message(chat_id=admin_id, text=f"{user_info}\nContact received", parse_mode="Markdown")
+        forwarded_anything_to_admin = True
+
     if message.poll:
-        options = [option.text for option in message.poll.options]
-        
-        await context.bot.send_poll(
-            chat_id=admin_id,
-            question=message.poll.question,
-            options=options,
-            is_anonymous=message.poll.is_anonymous,
-            type=message.poll.type,
-            allows_multiple_answers=message.poll.allows_multiple_answers,
-            explanation=message.poll.explanation
-        )
-        
-        await context.bot.send_message(
-            chat_id=admin_id,
-            text=f"{user_info}\nPoll received",
-            parse_mode="Markdown"
-        )
+        await update.message.reply_text("Unfortunately, this type of content is disabled to maintain confidentiality.")
     
-    await message.reply_text("Your message has been sent to the administrator!")
+    if forwarded_anything_to_admin:
+        await message.reply_text("Your message has been sent to the administrator!")
+    elif message.poll and not forwarded_anything_to_admin: # Only a poll was sent, and it was blocked
+        pass # The "disabled" message is enough
+    # If message was empty or only contained unsupported types not caught above, no confirmation will be sent.
 
 async def confirm_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != admin_id:
