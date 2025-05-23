@@ -21,7 +21,7 @@ from utils import (
 from config_manager import ConfigManager
 
 send_states = {}
-publish_state = {"active": False, "content": None}
+publish_state = {"active": False, "content": None, "pin": False}
 send_receipt = True
 send_to_admin_queue = asyncio.Queue()
 admin_to_user_queue = asyncio.Queue()
@@ -148,7 +148,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif not user.first_name:
             admin_display_name = "Administrator"
 
-        help_message_admin = f"{admin_display_name}, welcome!\n\nMain Commands:\n/ban <userid> - Ban a user.\n/unban <userid> - Unban a user.\n/publish - Start broadcasting a message to all subscribers.\n/cooldown <seconds> - Set anti-spam timer (0 to disable).\n/mode <group_id|off> - Set topic mode with a group or disable it.\n/whois <userid> - Get detailed information about a user.\n/update - Restart the bot (applies code changes).\n/off - Emergency shutdown (requires confirmation).\n/cancel - Cancel current multi-step operation.\n\nGeneral Commands (also available to users):\n/help - This help message.\n/start - Initial greeting/help.\n/subscribe - Subscribe to mass mailings.\n/unsubscribe - Unsubscribe from mass mailings.\n/hide - Toggle message delivery confirmations.\n\nAuthor: @yetazero"
+        help_message_admin = f"{admin_display_name}, welcome!\n\nMain Commands:\n/ban <userid> - Ban a user.\n/unban <userid> - Unban a user.\n/publish (pin) - Start broadcasting a message to all subscribers.\n/cooldown <seconds> - Set anti-spam timer (0 to disable).\n/mode <group_id|off> - Set topic mode with a group or disable it.\n/whois <userid> - Get detailed information about a user.\n/update - Restart the bot (applies code changes).\n/off - Emergency shutdown (requires confirmation).\n/cancel - Cancel current multi-step operation.\n\nGeneral Commands (also available to users):\n/help - This help message.\n/start - Initial greeting/help.\n/subscribe - Subscribe to mass mailings.\n/unsubscribe - Unsubscribe from mass mailings.\n/hide - Toggle message delivery confirmations.\n\nAuthor: @yetazero"
         
         try:
             await update.message.reply_text(help_message_admin)
@@ -763,79 +763,191 @@ def message_to_telegram_dict(message: Update.message):
         content["text"] = None 
     return content
 
-async def send_content_to_user(bot, target_user_id, content_dict, reply_to_message_id=None):
+async def send_content_to_user(bot, target_user_id, content_dict, reply_to_message_id=None, return_message=False):
     final_text = content_dict.get('text')
     final_caption = content_dict.get('caption')
-    pm = ParseMode.MARKDOWN 
+    pm = ParseMode.MARKDOWN
+    sent_message = None
 
-    if content_dict.get("document"): return await bot.send_document(chat_id=target_user_id, document=content_dict["document"], caption=final_caption, parse_mode=pm if final_caption else None, reply_to_message_id=reply_to_message_id)
-    elif content_dict.get("photo"): return await bot.send_photo(chat_id=target_user_id, photo=content_dict["photo"], caption=final_caption, parse_mode=pm if final_caption else None, reply_to_message_id=reply_to_message_id)
-    elif content_dict.get("video"): return await bot.send_video(chat_id=target_user_id, video=content_dict["video"], caption=final_caption, parse_mode=pm if final_caption else None, reply_to_message_id=reply_to_message_id)
-    elif content_dict.get("audio"): return await bot.send_audio(chat_id=target_user_id, audio=content_dict["audio"], caption=final_caption, parse_mode=pm if final_caption else None, reply_to_message_id=reply_to_message_id)
-    elif content_dict.get("voice"): return await bot.send_voice(chat_id=target_user_id, voice=content_dict["voice"], caption=final_caption, parse_mode=pm if final_caption else None, reply_to_message_id=reply_to_message_id)
+    if content_dict.get("document"):
+        sent_message = await bot.send_document(
+            chat_id=target_user_id, 
+            document=content_dict["document"], 
+            caption=final_caption, 
+            parse_mode=pm if final_caption else None, 
+            reply_to_message_id=reply_to_message_id
+        )
+    elif content_dict.get("photo"):
+        sent_message = await bot.send_photo(
+            chat_id=target_user_id, 
+            photo=content_dict["photo"], 
+            caption=final_caption, 
+            parse_mode=pm if final_caption else None, 
+            reply_to_message_id=reply_to_message_id
+        )
+    elif content_dict.get("video"):
+        sent_message = await bot.send_video(
+            chat_id=target_user_id, 
+            video=content_dict["video"], 
+            caption=final_caption, 
+            parse_mode=pm if final_caption else None, 
+            reply_to_message_id=reply_to_message_id
+        )
+    elif content_dict.get("audio"):
+        sent_message = await bot.send_audio(
+            chat_id=target_user_id, 
+            audio=content_dict["audio"], 
+            caption=final_caption, 
+            parse_mode=pm if final_caption else None, 
+            reply_to_message_id=reply_to_message_id
+        )
+    elif content_dict.get("voice"):
+        sent_message = await bot.send_voice(
+            chat_id=target_user_id, 
+            voice=content_dict["voice"], 
+            caption=final_caption, 
+            parse_mode=pm if final_caption else None, 
+            reply_to_message_id=reply_to_message_id
+        )
     elif content_dict.get("video_note"): 
         caption_msg = None
         if final_caption: 
-            caption_msg = await bot.send_message(chat_id=target_user_id, text=final_caption, parse_mode=pm, reply_to_message_id=reply_to_message_id)
+            caption_msg = await bot.send_message(
+                chat_id=target_user_id, 
+                text=final_caption, 
+                parse_mode=pm, 
+                reply_to_message_id=reply_to_message_id
+            )
             reply_to_message_id = caption_msg.message_id
-        return await bot.send_video_note(chat_id=target_user_id, video_note=content_dict["video_note"], reply_to_message_id=reply_to_message_id)
+            
+        sent_message = await bot.send_video_note(
+            chat_id=target_user_id, 
+            video_note=content_dict["video_note"], 
+            reply_to_message_id=reply_to_message_id
+        )
     elif content_dict.get("sticker"):
         caption_msg = None
         if final_caption: 
-            caption_msg = await bot.send_message(chat_id=target_user_id, text=final_caption, parse_mode=pm, reply_to_message_id=reply_to_message_id)
+            caption_msg = await bot.send_message(
+                chat_id=target_user_id, 
+                text=final_caption, 
+                parse_mode=pm, 
+                reply_to_message_id=reply_to_message_id
+            )
             reply_to_message_id = caption_msg.message_id
-        return await bot.send_sticker(chat_id=target_user_id, sticker=content_dict["sticker"], reply_to_message_id=reply_to_message_id)
+            
+        sent_message = await bot.send_sticker(
+            chat_id=target_user_id, 
+            sticker=content_dict["sticker"], 
+            reply_to_message_id=reply_to_message_id
+        )
     elif content_dict.get("dice"):
         caption_msg = None
         if final_caption: 
-            caption_msg = await bot.send_message(chat_id=target_user_id, text=final_caption, parse_mode=pm, reply_to_message_id=reply_to_message_id)
+            caption_msg = await bot.send_message(
+                chat_id=target_user_id, 
+                text=final_caption, 
+                parse_mode=pm, 
+                reply_to_message_id=reply_to_message_id
+            )
             reply_to_message_id = caption_msg.message_id
-        return await bot.send_dice(chat_id=target_user_id, emoji=content_dict["dice"]["emoji"], reply_to_message_id=reply_to_message_id)
+            
+        sent_message = await bot.send_dice(
+            chat_id=target_user_id, 
+            emoji=content_dict.get("dice", "🎲"), 
+            reply_to_message_id=reply_to_message_id
+        )
     elif content_dict.get("location"):
         caption_msg = None
         if final_caption: 
-            caption_msg = await bot.send_message(chat_id=target_user_id, text=final_caption, parse_mode=pm, reply_to_message_id=reply_to_message_id)
+            caption_msg = await bot.send_message(
+                chat_id=target_user_id, 
+                text=final_caption, 
+                parse_mode=pm, 
+                reply_to_message_id=reply_to_message_id
+            )
             reply_to_message_id = caption_msg.message_id
-        return await bot.send_location(chat_id=target_user_id, latitude=content_dict["location"]["latitude"], longitude=content_dict["location"]["longitude"], reply_to_message_id=reply_to_message_id)
+            
+        sent_message = await bot.send_location(
+            chat_id=target_user_id, 
+            latitude=content_dict["location"]["latitude"], 
+            longitude=content_dict["location"]["longitude"], 
+            reply_to_message_id=reply_to_message_id
+        )
     elif content_dict.get("contact"):
         caption_msg = None
         if final_caption: 
-            caption_msg = await bot.send_message(chat_id=target_user_id, text=final_caption, parse_mode=pm, reply_to_message_id=reply_to_message_id)
+            caption_msg = await bot.send_message(
+                chat_id=target_user_id, 
+                text=final_caption, 
+                parse_mode=pm, 
+                reply_to_message_id=reply_to_message_id
+            )
             reply_to_message_id = caption_msg.message_id
-        return await bot.send_contact(chat_id=target_user_id, phone_number=content_dict["contact"]["phone_number"], first_name=content_dict["contact"]["first_name"], last_name=content_dict["contact"].get("last_name"), reply_to_message_id=reply_to_message_id)
-    elif content_dict.get("poll"):
-        caption_msg = None
+            
+        sent_message = await bot.send_contact(
+            chat_id=target_user_id, 
+            phone_number=content_dict["contact"]["phone_number"], 
+            first_name=content_dict["contact"]["first_name"], 
+            last_name=content_dict["contact"].get("last_name", ""), 
+            reply_to_message_id=reply_to_message_id
+        )
+    elif final_text:
+        is_media_already_sent = False
         if final_caption: 
-            caption_msg = await bot.send_message(chat_id=target_user_id, text=final_caption, parse_mode=pm, reply_to_message_id=reply_to_message_id)
-            reply_to_message_id = caption_msg.message_id
-        return await bot.send_poll(chat_id=target_user_id, question=content_dict["poll"]["question"], options=content_dict["poll"]["options"], reply_to_message_id=reply_to_message_id)
-    elif final_text: 
-         is_media_already_sent = any(content_dict.get(k) for k in ["document", "photo", "video", "audio", "voice", "video_note", "sticker", "dice", "location", "contact", "poll"])
-         if not is_media_already_sent: 
-             return await bot.send_message(chat_id=target_user_id, text=final_text, parse_mode=pm, reply_to_message_id=reply_to_message_id)
+            is_media_already_sent = True
+        if not is_media_already_sent: 
+            sent_message = await bot.send_message(
+                chat_id=target_user_id, 
+                text=final_text, 
+                parse_mode=pm, 
+                reply_to_message_id=reply_to_message_id
+            )
     elif final_caption and not any(content_dict.get(k) for k in ["document", "photo", "video", "audio", "voice", "video_note", "sticker", "dice", "location", "contact", "poll"]):
-        await bot.send_message(chat_id=target_user_id, text=final_caption, parse_mode=pm)
+        sent_message = await bot.send_message(
+            chat_id=target_user_id, 
+            text=final_caption, 
+            parse_mode=pm
+        )
+    
+    if return_message:
+        return sent_message
 
 
 async def process_publishing(message, bot, content_dict):
-    sent_count = 0; failed_count = 0
-    users_to_publish = load_users(); banned = load_banned()
+    sent_count = 0
+    failed_count = 0
+    pin_count = 0
+    pin_failed = 0
+    should_pin = publish_state.get("pin", False)
+    pin_message_ids = {}
+    
+    users_to_publish = load_users()
+    banned = load_banned()
 
     attempt_users_list = [uid for uid in users_to_publish if uid not in banned]
     total_users_to_try = len(attempt_users_list)
 
     if total_users_to_try == 0:
         await message.reply_text("No users to publish to (all subscribed users are banned or list is empty).")
-        publish_state["active"] = False; publish_state["content"] = None
+        publish_state["active"] = False
+        publish_state["content"] = None
+        publish_state["pin"] = False
         return
 
-    status_msg = await message.reply_text(f"Publishing to {total_users_to_try} users...")
+    pin_text = " with PIN" if should_pin else ""
+    status_msg = await message.reply_text(f"Publishing{pin_text} to {total_users_to_try} users...")
     processed_count = 0
+    
     for user_id_str in attempt_users_list:
-        processed_count +=1
+        processed_count += 1
         try:
-            await send_content_to_user(bot, int(user_id_str), content_dict)
+            sent_message = await send_content_to_user(bot, int(user_id_str), content_dict, return_message=True)
             sent_count += 1
+            
+            if should_pin and sent_message:
+                pin_message_ids[user_id_str] = sent_message.message_id
+                
         except Forbidden:
             failed_count += 1
         except BadRequest as e: 
@@ -843,17 +955,44 @@ async def process_publishing(message, bot, content_dict):
         except Exception as e:
             failed_count += 1
 
-        if processed_count % 10 == 0 or processed_count == total_users_to_try : 
+        if processed_count % 10 == 0 or processed_count == total_users_to_try: 
             try:
-                await status_msg.edit_text(f"Publishing: {processed_count}/{total_users_to_try} processed, {sent_count} sent, {failed_count} errors...")
-            except BadRequest as e:
+                await status_msg.edit_text(f"Publishing{pin_text}: {processed_count}/{total_users_to_try} processed, {sent_count} sent, {failed_count} errors...")
+            except BadRequest:
                 pass
-        await asyncio.sleep(0.1) 
+        await asyncio.sleep(0.1)
+    
+    if should_pin and pin_message_ids:
+        await status_msg.edit_text(f"Publishing complete. Now pinning messages for {len(pin_message_ids)} users...")
+        
+        for user_id_str, msg_id in pin_message_ids.items():
+            try:
+                await bot.pin_chat_message(
+                    chat_id=int(user_id_str),
+                    message_id=msg_id,
+                    disable_notification=False
+                )
+                pin_count += 1
+                _last_pinned_messages[int(user_id_str)] = {
+                    'message_id': msg_id,
+                    'timestamp': time.time()
+                }
+            except Exception:
+                pin_failed += 1
+            await asyncio.sleep(0.1)
+    
+    status_text = f"Publishing complete: {sent_count} successfully sent, {failed_count} errors out of {total_users_to_try} attempted users."
+    if should_pin:
+        status_text += f" PIN results: {pin_count} pinned, {pin_failed} failed to pin."
+        
     try:
-        await status_msg.edit_text(f"Publishing complete: {sent_count} successfully sent, {failed_count} errors out of {total_users_to_try} attempted users.")
-    except BadRequest as e:
+        await status_msg.edit_text(status_text)
+    except BadRequest:
         pass
-    publish_state["active"] = False; publish_state["content"] = None
+        
+    publish_state["active"] = False
+    publish_state["content"] = None
+    publish_state["pin"] = False
 
 
 async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -956,8 +1095,15 @@ async def cancel_sending(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def start_publish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != admin_id: return
-    publish_state["active"] = True; publish_state["content"] = None
-    await update.message.reply_text("Send content for mass mailing, or /cancel.")
+    publish_state["active"] = True
+    publish_state["content"] = None
+    publish_state["pin"] = False
+    
+    if context.args and len(context.args) > 0 and context.args[0].lower() == "pin":
+        publish_state["pin"] = True
+        await update.message.reply_text("Send content for mass mailing with PIN, or /cancel.")
+    else:
+        await update.message.reply_text("Send content for mass mailing, or /cancel.")
 
 
 async def confirm_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
