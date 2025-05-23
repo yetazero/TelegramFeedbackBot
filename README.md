@@ -1,6 +1,16 @@
-# TelegramFeedbackBot v0.5.2
+# TelegramFeedbackBot v0.5.3
 
 An easy-to-use Telegram bot for collecting user feedback, now enhanced with a graphical management tool and even more features for richer interaction and control. This application provides a simple graphical interface (Telegram Bot Manager) to manage your Telegram bot. It allows you to start and stop the bot, configure its settings, and now offers enhanced communication capabilities with users.
+
+---
+
+## New in v0.5.3:
+
+* **Chat Control (`/pause` and `/resume`)**:
+    * The new `/pause` command allows the administrator to **temporarily disable chat and commands for all users**. During this pause, only the administrator can continue to use bot commands.
+    * The `/resume` command **re-enables all chat and commands for users**, restoring normal bot operation.
+
+---
 
 ## New in v0.5.2:
 
@@ -8,6 +18,8 @@ An easy-to-use Telegram bot for collecting user feedback, now enhanced with a gr
     * Added `pin` option to the `/publish` command (e.g., `/publish pin`). This allows the administrator to send a mass message to all subscribed users and automatically pin it in their respective chats (if the user is not banned).
 * **Improved Admin Message Display and Pinning**:
     * Fixed issues related to the correct display and automatic pinning of administrator messages (e.g., replies to users or forwarded content), ensuring better visibility and management of communication.
+
+---
 
 ## New in v0.5.1:
 
@@ -38,6 +50,8 @@ Version 0.5.1 significantly enhances the bot's functionality and usability, maki
 
 This will allow you to leverage all the advantages of the new version: commands like `/ban`, `/unban`, `/whois`, support for replies, and pinned messages directly within the group. You'll gain a more **structured conversation** with each user and the ability to **rename the topic** for easier identification.
 
+---
+
 ## New in v0.4:
 
 * **Subscription Management for Mass Publications:**
@@ -51,6 +65,8 @@ This will allow you to leverage all the advantages of the new version: commands 
 * **Updated Help Command:**
     * The `/help` command's description has been revised to clearly state that `/subscribe` and `/unsubscribe` relate to **mass publications**, not all admin messages.
 
+---
+
 ## New in v0.3:
 
 * **Poll Support:** Users can now send polls to the bot.
@@ -58,11 +74,15 @@ This will allow you to leverage all the advantages of the new version: commands 
 * **Contact Sharing:** Users can share their contacts with the bot.
 * **Anti-Spam Cooldown (`/cooldown`):** Administrators can now use the `/cooldown` command to set a time limit between user messages, helping to prevent spam and ensure smoother interactions.
 
+---
+
 ## Key Improvements from v0.2:
 
 * **Mass Messaging:** Introduced the `/publish` (`/p`) command, enabling administrators to send messages to all active bot users.
 * **Sticker Support:** Fixed a bug that prevented the bot from correctly processing messages containing custom sticker packs.
 * **Interactive Emojis:** Added support for interactive emotions (Dice) for a more engaging user experience.
+
+---
 
 ## Dependencies
 
@@ -73,6 +93,8 @@ The following Python libraries are required to run the Python script. You can in
 * **`Pillow` (PIL)**: A library for image processing (used for the tray icon). Install using: `pip install Pillow`
 * **`tkinter`**: Python's standard GUI package, used for the management interface. It is usually included with Python.
 * **`configparser`**: For reading and writing configuration files. It is usually included with Python.
+
+---
 
 ## Setup
 
@@ -89,6 +111,8 @@ The following Python libraries are required to run the Python script. You can in
     token = YOUR_TELEGRAM_BOT_TOKEN
     ```
     If `config.ini` doesn't exist, the application will create a default one when run.
+
+---
 
 ## Usage
 
@@ -110,6 +134,8 @@ You can run the bot in the following ways:
 
 **Note:** The Windows executable (`bot.exe`) file was previously removed from the repository due to false positive detections by some analysis systems. Running the application using the Python script (`bot.py`) or the batch file (`Start.bat`) after installing the necessary dependencies is the recommended and safer approach.
 
+---
+
 ## Features
 
 * **Graphical Management Tool:** An intuitive `tkinter`-based interface to start and stop the bot.
@@ -121,6 +147,8 @@ You can run the bot in the following ways:
 * **Message Cancellation (`/cancel` or `/c`):** Allows the administrator to cancel ongoing message sending or mass mailing processes.
 * **Interactive Dice:** Supports sending and receiving Telegram's interactive dice emojis.
 * **User Tracking:** The bot keeps track of users who have started a conversation in the `users.txt` file.
+
+---
 
 ## Author
 
