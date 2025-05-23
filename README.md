@@ -1,8 +1,13 @@
 # TelegramFeedbackBot v0.5.1
 
-An easy-to-use Telegram bot for collecting user feedback, now significantly enhanced with a graphical management tool and even more features for richer interaction and control. This application provides a simple graphical interface (Telegram Bot Manager) to manage your Telegram bot. It allows you to start and stop the bot, configure its settings, and now offers enhanced communication capabilities with users.
+An easy-to-use Telegram bot for collecting user feedback, now enhanced with a graphical management tool and even more features for richer interaction and control.
+This application provides a simple graphical interface (Telegram Bot Manager) to manage your Telegram bot. It allows you to start and stop the bot, configure its settings, and now offers enhanced communication capabilities with users.
 
 ## New in v0.5.1:
+
+Telegram Feedback Bot: New Features in Version 0.5.1
+
+Version 0.5.1 significantly enhances the bot's functionality and usability, making it more convenient and feature-rich.
 
 **Expanded Message and User Management:**
 
@@ -10,16 +15,17 @@ An easy-to-use Telegram bot for collecting user feedback, now significantly enha
 * The new `/mode` command allows you to activate or deactivate topic mode for your group.
 * The new `/whois` command allows you to get detailed information about any bot user to better understand who is writing.
 * **Reply Support**: You can now reply directly to user messages, and the bot will correctly link your reply, sending it to the right user.
-* **Pinned Messages**: The administrator can now see and manage pinned messages directly within the bot's chat.
-* **Notification Control**: The `/hide` command allows the **administrator** to enable or disable delivery notifications for your messages to users.
+* **Pinned Messages**: The administrator can now see and manage pinned messages directly within the bot's group chat.
+* **Notification Control**: The `/hide` command allows users to enable or disable delivery notifications.
 
 **Application Convenience and Stability:**
 
-* **Reliable Restart and Tray Operation**:
+* **Reliable Restart and Tray Operation:**
     * The `/update` command allows you to restart the bot directly from Telegram to apply changes.
     * The `/off` command provides a safe shutdown of the bot with confirmation.
     * The bot now reliably prevents multiple instances from running accidentally.
     * Automatic launch into the system tray (notification area) is supported on startup or after a bot restart, saving desktop space.
+
 
 ---
 
