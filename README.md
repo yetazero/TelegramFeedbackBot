@@ -5,7 +5,7 @@ An easy-to-use Telegram bot for collecting user feedback, now enhanced with a gr
 ## New in v0.5.2:
 
 * **Mass Publishing with Pin Option**:
-    * Added `pin` option to the `/publish` command (e.g., `/publish pin <message>`). This allows the administrator to send a mass message to all subscribed users and automatically pin it in their respective chats (if the user is not banned).
+    * Added `pin` option to the `/publish` command (e.g., `/publish pin`). This allows the administrator to send a mass message to all subscribed users and automatically pin it in their respective chats (if the user is not banned).
 * **Improved Admin Message Display and Pinning**:
     * Fixed issues related to the correct display and automatic pinning of administrator messages (e.g., replies to users or forwarded content), ensuring better visibility and management of communication.
 
