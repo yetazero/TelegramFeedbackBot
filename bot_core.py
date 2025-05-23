@@ -41,6 +41,8 @@ _restart_lock = threading.Lock()
 
 _last_pinned_messages = {}
 
+bot_paused = False
+
 
 def save_message_link(user_id, user_message_id, admin_chat_id, admin_message_id, is_from_user=True):
     global message_links
@@ -128,6 +130,10 @@ async def get_effective_user_details(user_id, update: Update = None, context: Co
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id_str = str(user.id)
+    
+    global bot_paused
+    if bot_paused and user.id != admin_id:
+        return
 
     await get_effective_user_details(user_id_str, update, context)
 
@@ -148,7 +154,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif not user.first_name:
             admin_display_name = "Administrator"
 
-        help_message_admin = f"{admin_display_name}, welcome!\n\nMain Commands:\n/ban <userid> - Ban a user.\n/unban <userid> - Unban a user.\n/publish (pin) - Start broadcasting a message to all subscribers.\n/cooldown <seconds> - Set anti-spam timer (0 to disable).\n/mode <group_id|off> - Set topic mode with a group or disable it.\n/whois <userid> - Get detailed information about a user.\n/update - Restart the bot (applies code changes).\n/off - Emergency shutdown (requires confirmation).\n/cancel - Cancel current multi-step operation.\n\nGeneral Commands (also available to users):\n/help - This help message.\n/start - Initial greeting/help.\n/subscribe - Subscribe to mass mailings.\n/unsubscribe - Unsubscribe from mass mailings.\n/hide - Toggle message delivery confirmations.\n\nAuthor: @yetazero"
+        help_message_admin = f"{admin_display_name}, welcome!\n\nMain Commands:\n/ban <userid> - Ban a user.\n/unban <userid> - Unban a user.\n/publish (pin) - Start broadcasting a message to all subscribers.\n/cooldown <seconds> - Set anti-spam timer (0 to disable).\n/mode <group_id|off> - Set topic mode with a group or disable it.\n/whois <userid> - Get detailed information about a user.\n/pause - Temporarily disable bot for users (admin commands still work).\n/resume - Resume normal bot operation after pause.\n/update - Restart the bot (applies code changes).\n/off - Emergency shutdown (requires confirmation).\n/cancel - Cancel current multi-step operation.\n\nGeneral Commands (also available to users):\n/help - This help message.\n/start - Initial greeting/help.\n/subscribe - Subscribe to mass mailings.\n/unsubscribe - Unsubscribe from mass mailings.\n/hide - Toggle message delivery confirmations.\n\nAuthor: @yetazero"
         
         try:
             await update.message.reply_text(help_message_admin)
@@ -242,6 +248,10 @@ async def whois_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def forward_to_admin_or_topic(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global bot_paused
+    if bot_paused:
+        return
+        
     user = update.effective_user
     user_id_str = str(user.id)
     message = update.message
@@ -451,6 +461,10 @@ async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYP
     if update.effective_user.id != admin_id: return
     message = update.message
     admin_user_id_str = str(update.effective_user.id)
+    
+    if bot_paused and message.text and not message.text.startswith('/'):
+        await update.message.reply_text("Bot is paused. Regular messaging is disabled.\nUse /resume to enable all features.")
+        return
 
     if hasattr(message, 'pinned_message') and message.pinned_message:
         pinned_msg = message.pinned_message
@@ -1115,7 +1129,13 @@ async def confirm_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def subscribe_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id_str = str(update.effective_user.id)
+    user = update.effective_user
+    user_id_str = str(user.id)
+    
+    global bot_paused
+    if bot_paused and user.id != admin_id:
+        return
+    
     if user_id_str in load_banned(): 
         await update.message.reply_text("You are banned and cannot subscribe."); return
     users = load_users()
@@ -1128,7 +1148,13 @@ async def subscribe_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def unsubscribe_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id_str = str(update.effective_user.id)
+    user = update.effective_user
+    user_id_str = str(user.id)
+    
+    global bot_paused
+    if bot_paused and user.id != admin_id:
+        return
+    
     users = load_users()
     if user_id_str in users:
         users.remove(user_id_str); save_users(users)
@@ -1138,7 +1164,13 @@ async def unsubscribe_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def hide_notifications_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id_str = str(update.effective_user.id)
+    user = update.effective_user
+    user_id_str = str(user.id)
+    
+    global bot_paused
+    if bot_paused and user.id != admin_id:
+        return
+    
     user_data = get_user_data(user_id_str) 
     if user_data is None: 
         user_data = {} 
@@ -1174,10 +1206,6 @@ async def mode_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             topic_mode_group_id = None
             
             await update.message.reply_text("Topic mode disabled. Bot will now restart in direct message mode.")
-            
-            with open("restart_flag.txt", "w") as f:
-                f.write("normal")
-                f.flush()
             
             import subprocess
             
@@ -1444,6 +1472,34 @@ async def off_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Invalid confirmation code. Please try again.")
 
 
+async def pause_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global bot_paused
+    
+    if update.effective_user.id != admin_id:
+        return
+    
+    if bot_paused:
+        await update.message.reply_text("Bot is already paused.")
+        return
+        
+    bot_paused = True
+    await update.message.reply_text("⏸️ Bot paused. All user commands and messages will be ignored. \nAdmin commands will still work, but regular messaging is disabled.\nTo resume operation, use /resume command.")
+
+
+async def resume_bot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global bot_paused
+    
+    if update.effective_user.id != admin_id:
+        return
+    
+    if not bot_paused:
+        await update.message.reply_text("Bot is already running in normal mode.")
+        return
+        
+    bot_paused = False
+    await update.message.reply_text("▶️ Bot operation resumed. All features are now available again.")
+
+
 async def run_telegram_bot(token: str, admin_id_param: int, initial_cooldown: int, config_manager_instance: ConfigManager):
 
     global admin_id, current_cooldown_seconds, topic_mode_group_id, config_mngr
@@ -1485,6 +1541,9 @@ async def run_telegram_bot(token: str, admin_id_param: int, initial_cooldown: in
     app.add_handler(CommandHandler("update", update_command))
 
     app.add_handler(CommandHandler("off", off_command))
+    
+    app.add_handler(CommandHandler("pause", pause_bot))
+    app.add_handler(CommandHandler("resume", resume_bot))
 
     app.add_handler(CommandHandler(["subscribe", "sub"], subscribe_user))
     app.add_handler(CommandHandler(["unsubscribe", "unsub"], unsubscribe_user))
