@@ -1,7 +1,13 @@
-# TelegramFeedbackBot v0.5.1
+# TelegramFeedbackBot v0.5.2
 
-An easy-to-use Telegram bot for collecting user feedback, now enhanced with a graphical management tool and even more features for richer interaction and control.
-This application provides a simple graphical interface (Telegram Bot Manager) to manage your Telegram bot. It allows you to start and stop the bot, configure its settings, and now offers enhanced communication capabilities with users.
+An easy-to-use Telegram bot for collecting user feedback, now enhanced with a graphical management tool and even more features for richer interaction and control. This application provides a simple graphical interface (Telegram Bot Manager) to manage your Telegram bot. It allows you to start and stop the bot, configure its settings, and now offers enhanced communication capabilities with users.
+
+## New in v0.5.2:
+
+* **Mass Publishing with Pin Option**:
+    * Added `pin` option to the `/publish` command (e.g., `/publish pin <message>`). This allows the administrator to send a mass message to all subscribed users and automatically pin it in their respective chats (if the user is not banned).
+* **Improved Admin Message Display and Pinning**:
+    * Fixed issues related to the correct display and automatic pinning of administrator messages (e.g., replies to users or forwarded content), ensuring better visibility and management of communication.
 
 ## New in v0.5.1:
 
@@ -25,7 +31,6 @@ Version 0.5.1 significantly enhances the bot's functionality and usability, maki
     * The `/off` command provides a safe shutdown of the bot with confirmation.
     * The bot now reliably prevents multiple instances from running accidentally.
     * Automatic launch into the system tray (notification area) is supported on startup or after a bot restart, saving desktop space.
-
 
 ---
 
