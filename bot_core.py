@@ -374,10 +374,14 @@ async def forward_to_admin_or_topic(update: Update, context: ContextTypes.DEFAUL
         if message.reply_to_message:
             user_replied_to_msg_id = message.reply_to_message.message_id
             
-            get_admin_message_for_user_message(
+            admin_chat_id, admin_msg_id, is_from_user = get_admin_message_for_user_message(
                 int(user_id_str), user_replied_to_msg_id
             )
-                
+            
+            if admin_chat_id and admin_msg_id:
+                reply_info = f"\n\n[This is a reply to an admin message]"
+            else:
+                reply_info = f"\n\n[User replied to their own message]"
         if reply_info:
             header_text_for_admin += reply_info
         
@@ -680,7 +684,7 @@ async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYP
                     save_message_link(
                         user_id=int(target_user_id_str),
                         user_message_id=sent_message.message_id,
-                        admin_chat_id=admin_chat_id,
+                        admin_chat_id=message.chat_id,
                         admin_message_id=admin_message_id,
                         is_from_user=False
                     )
