@@ -1,6 +1,67 @@
-# TelegramFeedbackBot v0.5.3
+# TelegramFeedbackBot v0.7.0
 
-An easy-to-use Telegram bot for collecting user feedback, now enhanced with a graphical management tool and even more features for richer interaction and control. This application provides a simple graphical interface (Telegram Bot Manager) to manage your Telegram bot. It allows you to start and stop the bot, configure its settings, and now offers enhanced communication capabilities with users.
+An easy-to-use Telegram bot for collecting user feedback, now significantly enhanced with a robust management system, expanded communication features, advanced moderation tools, and improved stability. This application provides a graphical interface (Telegram Bot Manager) for seamless bot control and offers richer, more organized interaction with users.
+
+---
+
+## New in v0.7.0:
+
+This version introduces a comprehensive overhaul of the bot's architecture and a wealth of new features focused on **advanced moderation, user management, enhanced communication, and improved stability and debugging**.
+
+* **Advanced Role Management (`/admin` and `/operator`)**:
+    * **Admin Role (`/admin`)**: A new `roles.json` file now manages administrators. The main administrator (set via `add_admin.py` on first run or manually) can add or remove other administrators and operators. Only administrators can use `/admin` commands.
+    * **Operator Role (`/operator`)**: Operators can now be designated. They have specific permissions, allowing them to manage user interactions in topic mode, ban/unban users, and use various moderation tools without full administrative access.
+    * **Commands**:
+        * `/admin add <user_id>`: Add a user as an administrator.
+        * `/admin remove <user_id>`: Remove a user from administrators.
+        * `/operator add <user_id>`: Add a user as an operator.
+        * `/operator remove <user_id>`: Remove a user from operators.
+
+* **Enhanced Message Management**:
+    * **Message Deletion (`/delete`)**:
+        * Admins and operators can now use `/delete` as a reply to a message in a topic/admin chat to delete the linked message for both the user and the admin/topic.
+        * Provides detailed feedback on deletion status (fully deleted, partially deleted, failed).
+    * **Message Editing Tracking**:
+        * The bot now tracks when users or staff edit their messages.
+        * Edited user messages are updated in the admin chat, showing the `[Edited]` status.
+        * Edited admin/operator replies are updated in the user chat.
+    * **Improved Pinning/Unpinning (`/pin` and `/unpin`)**:
+        * The `/pin` command, when used as a reply, will pin the message in both the user's private chat and the associated topic (if topic mode is active).
+        * The `/unpin` command unpins messages from both locations.
+
+* **Reactions Management (`/reactions`, `/clear_reaction`)**:
+    * **Reactions for Admins/Operators**: Staff can now react to messages in the admin chat/topics using specific commands (e.g., `/fire`, `/zap`, `/like`, `/dislike`). These reactions are mirrored to the linked user message.
+    * **Clear Reactions**: The `/clear_reaction` command allows staff to remove all reactions from a linked message.
+    * **View Reactions**: The `/reactions` command shows available reactions.
+
+* **Comprehensive User Details (`/whois` enhancement)**:
+    * The `/whois` command (for admins/operators) now provides significantly more detailed information about a user, including:
+        * User ID, Username, Full Name
+        * Account registration date (if available)
+        * Associated Topic ID (if in topic mode)
+        * First and Last interaction timestamps.
+        * Total interaction count.
+        * Notification preference (`/hide` status).
+        * Banned status.
+
+* **Enhanced Debugging and Logging (`/debug`)**:
+    * A new `/debug` command allows administrators to control verbose logging.
+    * Options include `on`, `off`, `set <chat_id>`, `status`.
+    * When debug mode is "on", all bot actions (sent messages, received messages, command usage, errors) are logged to a specified debug chat. This is invaluable for troubleshooting.
+    * The `bot_logging.py` and `debug.py` modules manage this new functionality.
+
+* **Improved Application Stability and Startup**:
+    * **Single Instance Prevention**: The bot now reliably prevents multiple instances from running concurrently using file locks and socket checks, preventing conflicts.
+    * **Restart Consistency**: The `main.py` now includes logic for handling `restart_flag.txt`, ensuring proper startup behavior after a bot restart (e.g., returning to tray).
+    * **Resource Management**: Includes `gc.collect()` calls for better memory management.
+    * **Robust Configuration Management**: `config_manager.py` is updated to ensure `topic_mode_group_id` is always present in `config.ini`.
+
+* **Minor Improvements & Refinements**:
+    * Updated command handlers for better organization.
+    * Improved error handling and feedback messages.
+    * More robust user ID handling and file operations (`utils.py`, `user_details.py`).
+    * `ascii_art.py` included, possibly for startup splash or other visual elements.
+    * Refined `bot_core.py` to integrate new features seamlessly.
 
 ---
 
@@ -109,8 +170,16 @@ The following Python libraries are required to run the Python script. You can in
     ```ini
     admin_id = YOUR_ADMIN_TELEGRAM_ID
     token = YOUR_TELEGRAM_BOT_TOKEN
+    topic_mode_group_id = YOUR_TOPIC_GROUP_ID # New in v0.7.0, required for Topic Mode
     ```
     If `config.ini` doesn't exist, the application will create a default one when run.
+
+3.  **Initial Admin Setup (New in v0.7.0 - Crucial!)**:
+    For the first run, you need to add your main administrator ID using a dedicated script:
+    ```bash
+    python add_admin.py YOUR_MAIN_ADMIN_TELEGRAM_ID
+    ```
+    Replace `YOUR_MAIN_ADMIN_TELEGRAM_ID` with your actual Telegram User ID. This ensures your account has initial administrative privileges to manage other roles.
 
 ---
 
@@ -121,10 +190,10 @@ You can run the bot in the following ways:
 **Option 1: Running via Python Script**
 
 1.  Ensure you have Python and all dependencies installed (see Setup).
-2.  Navigate to the directory containing `bot.py` in your terminal or command prompt.
+2.  Navigate to the directory containing `main.py` in your terminal or command prompt.
 3.  Run the script using:
     ```bash
-    python bot.py
+    python main.py
     ```
 
 **Option 2: Running via Batch File (Windows)**
@@ -132,21 +201,33 @@ You can run the bot in the following ways:
 1.  A `Start.bat` file is included in the repository for convenience on Windows.
 2.  Double-click the `Start.bat` file to run the bot.
 
-**Note:** The Windows executable (`bot.exe`) file was previously removed from the repository due to false positive detections by some analysis systems. Running the application using the Python script (`bot.py`) or the batch file (`Start.bat`) after installing the necessary dependencies is the recommended and safer approach.
+**Note:** The Windows executable (`bot.exe`) file was previously removed from the repository due to false positive detections by some analysis systems. Running the application using the Python script (`main.py`) or the batch file (`Start.bat`) after installing the necessary dependencies is the recommended and safer approach.
 
 ---
 
 ## Features
 
 * **Graphical Management Tool:** An intuitive `tkinter`-based interface to start and stop the bot.
-* **Configuration Management:** Easily configure the bot's Telegram Token and Admin ID through the GUI, which saves to `config.ini`.
+* **Configuration Management:** Easily configure the bot's Telegram Token, Admin ID, and Topic Mode Group ID through the GUI, which saves to `config.ini`.
 * **System Tray Integration:** Option to minimize the bot management tool to the system tray for background operation.
-* **User Feedback Forwarding:** Users can send messages to the bot, which are then forwarded to the configured Admin ID.
-* **Banning/Unbanning Users:** Administrators can ban or unban users using the `/ban` (`/b`) and `/unban` (`/u`) commands. Banned users' messages will be ignored by the bot.
-* **Mass Messaging (`/publish` or `/p`):** Administrators can send announcements or information to all subscribed users.
+* **User Feedback Forwarding:** Users can send messages to the bot, which are then forwarded to the configured Admin ID or a dedicated topic.
+* **Role-Based Access Control:** Differentiated roles for **Administrators** and **Operators** with specific command permissions.
+* **Banning/Unbanning Users:** Administrators and Operators can ban or unban users using the `/ban` (`/b`) and `/unban` (`/u`) commands. Banned users' messages will be ignored by the bot.
+* **Mass Messaging (`/publish` or `/p`):** Administrators can send announcements or information to all subscribed users, with an option to pin messages.
 * **Message Cancellation (`/cancel` or `/c`):** Allows the administrator to cancel ongoing message sending or mass mailing processes.
 * **Interactive Dice:** Supports sending and receiving Telegram's interactive dice emojis.
-* **User Tracking:** The bot keeps track of users who have started a conversation in the `users.txt` file.
+* **User Tracking:** The bot keeps track of users who have started a conversation in the `users.txt` file and detailed user data in `user_details.json`.
+* **Polls, Locations, Contacts:** Supports receiving polls, shared locations, and contacts from users.
+* **Anti-Spam Cooldown (`/cooldown`):** Administrators can set a time limit between user messages.
+* **Bot Control Commands:** `/pause`, `/resume`, `/update` (restart), `/off` (safe shutdown).
+* **Topic Mode:** Directs each user's messages into a separate topic in the admin group for organized communication.
+* **Reply Support:** Admins/operators can reply directly to user messages.
+* **Pinned Messages Management:** Admins/operators can manage pinned messages directly within the bot's group chat.
+* **Notification Control (`/hide`):** Users can enable/disable delivery notifications.
+* **Message Editing/Deletion Tracking:** Monitors and reflects message edits/deletions from both users and staff.
+* **Reaction Management:** Staff can add/clear reactions on linked messages.
+* **Detailed User Information:** The `/whois` command provides comprehensive user data.
+* **Debugging Mode (`/debug`):** Allows administrators to enable and configure verbose logging of bot activities to a specific chat.
 
 ---
 
