@@ -560,10 +560,43 @@ async def handle_admin_message(update: Update, context: ContextTypes.DEFAULT_TYP
     message = update.message
 
     global publish_state
-    if publish_state["active"] and publish_state["content"] is None and message and message.text and not message.text.startswith('/'):
-        publish_state["content"] = message
-        text_preview = message.text[:100] + "..." if len(message.text) > 100 else message.text
-        await message.reply_text(f"Content received for publishing:\n'{text_preview}'\nUse /confirm to send or /cancel to abort.")
+    if publish_state["active"] and publish_state["content"] is None and message:
+        # Check if it's not a command
+        is_command = False
+        if message.text and message.text.startswith('/'):
+            is_command = True
+            
+        if not is_command:
+            publish_state["content"] = message
+            
+            # Create a preview based on message type
+            preview = ""
+            if message.text:
+                text_preview = message.text[:100] + "..." if len(message.text) > 100 else message.text
+                preview = f"Text: '{text_preview}'"
+            elif message.photo:
+                preview = "Photo with"
+                if message.caption:
+                    caption_preview = message.caption[:100] + "..." if len(message.caption) > 100 else message.caption
+                    preview += f" caption: '{caption_preview}'"
+                else:
+                    preview += " no caption"
+            elif message.video:
+                preview = "Video"
+            elif message.document:
+                preview = f"Document: {message.document.file_name}"
+            elif message.audio:
+                preview = "Audio"
+            elif message.voice:
+                preview = "Voice message"
+            elif message.sticker:
+                preview = "Sticker"
+            elif message.animation:
+                preview = "Animation/GIF"
+            else:
+                preview = "Content (unspecified type)"
+                
+            await message.reply_text(f"Content received for publishing:\n{preview}\nUse /confirm to send or /cancel to abort.")
         return
     if message is None:
         return
