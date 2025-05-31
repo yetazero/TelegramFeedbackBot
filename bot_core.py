@@ -1637,12 +1637,10 @@ async def run_telegram_bot(token: str, admin_id_param: int, initial_cooldown: in
         user_commands = [
             BotCommand("start", "Start the bot / Show help"),
             BotCommand("help", "Show help message"),
-            BotCommand("whois", "Get user information"),
             BotCommand("subscribe", "Subscribe to updates"),
             BotCommand("unsubscribe", "Unsubscribe from updates"),
             BotCommand("hide", "Hide notifications"),
             BotCommand("reactions", "View/manage message reactions"),
-            BotCommand("clear_reaction", "Clear reaction on a message"),
         ]
         await app.bot.set_my_commands(user_commands)
 
